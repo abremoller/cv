@@ -1,0 +1,576 @@
+/* ============================================
+   CV.Web — Professional CV Stylesheet
+   ============================================ */
+
+:root {
+    --color-primary: #1a1a2e;
+    --color-accent: #2563eb;
+    --color-accent-light: #dbeafe;
+    --color-text: #1f2937;
+    --color-text-secondary: #6b7280;
+    --color-text-light: #9ca3af;
+    --color-border: #e5e7eb;
+    --color-bg: #ffffff;
+    --color-bg-subtle: #f9fafb;
+    --color-sidebar-bg: #f8fafc;
+
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-serif: 'Source Serif 4', Georgia, serif;
+
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+}
+
+/* Reset & Base */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    background-color: #eef2f7;
+    line-height: 1.6;
+}
+
+a {
+    color: var(--color-accent);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Page Container */
+.cv-page {
+    max-width: 1000px;
+    margin: var(--spacing-xl) auto;
+    background: var(--color-bg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 32px rgba(0, 0, 0, 0.06);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* ============================================
+   Header
+   ============================================ */
+.cv-header {
+    background: var(--color-primary);
+    color: #ffffff;
+    padding: var(--spacing-2xl) var(--spacing-2xl);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-xl);
+}
+
+.header-name h1 {
+    font-family: var(--font-serif);
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: var(--spacing-xs);
+}
+
+.header-title {
+    font-size: 1.1rem;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.02em;
+}
+
+.header-contact {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.85);
+    justify-content: flex-end;
+}
+
+.contact-item a {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.contact-item a:hover {
+    color: #ffffff;
+}
+
+.icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+/* ============================================
+   Summary
+   ============================================ */
+.cv-summary {
+    padding: var(--spacing-lg) var(--spacing-2xl);
+    background: var(--color-bg-subtle);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.cv-summary p {
+    font-size: 0.95rem;
+    color: var(--color-text-secondary);
+    max-width: 70ch;
+    line-height: 1.65;
+}
+
+/* ============================================
+   Body Layout
+   ============================================ */
+.cv-body {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+}
+
+.cv-sidebar {
+    background: var(--color-sidebar-bg);
+    border-right: 1px solid var(--color-border);
+    padding: var(--spacing-xl) var(--spacing-lg);
+}
+
+.cv-main {
+    padding: var(--spacing-xl) var(--spacing-2xl);
+}
+
+/* ============================================
+   Section Titles
+   ============================================ */
+.section-title {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-accent);
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 2px solid var(--color-accent);
+}
+
+.cv-section {
+    margin-bottom: var(--spacing-2xl);
+}
+
+.cv-section:last-child {
+    margin-bottom: 0;
+}
+
+/* ============================================
+   Personal Info (definition list)
+   ============================================ */
+.info-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--spacing-xs) var(--spacing-md);
+    font-size: 0.85rem;
+}
+
+.info-list dt {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+}
+
+.info-list dd {
+    color: var(--color-text);
+}
+
+/* ============================================
+   Skills
+   ============================================ */
+.skills-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.skill-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.skill-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.skill-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.skill-years {
+    font-size: 0.7rem;
+    color: var(--color-text-light);
+}
+
+.skill-bar {
+    height: 4px;
+    background: var(--color-border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.skill-bar-fill {
+    height: 100%;
+    background: var(--color-accent);
+    border-radius: 2px;
+    transition: width 0.6s ease;
+}
+
+.skills-subhead {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-sm);
+}
+
+.focus-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.focus-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    background: var(--color-primary);
+    color: #ffffff;
+    border-radius: 3px;
+}
+
+/* ============================================
+   Tools
+   ============================================ */
+.tools-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.tool-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    background: var(--color-accent-light);
+    color: var(--color-accent);
+    border-radius: 3px;
+}
+
+/* ============================================
+   Experience
+   ============================================ */
+.job {
+    margin-bottom: var(--spacing-2xl);
+    padding-bottom: var(--spacing-xl);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.job:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+}
+
+.job-company {
+    font-family: var(--font-sans);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.job-role {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.job-location {
+    font-style: normal;
+}
+
+.job-period {
+    font-size: 0.8rem;
+    color: var(--color-text-light);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.job-description {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.job-responsibilities {
+    font-size: 0.85rem;
+    padding-left: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+    color: var(--color-text);
+}
+
+.job-responsibilities li {
+    margin-bottom: var(--spacing-xs);
+}
+
+/* Projects */
+.projects {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.project {
+    padding: var(--spacing-md);
+    background: var(--color-bg-subtle);
+    border-radius: 4px;
+    border-left: 3px solid var(--color-accent);
+}
+
+.project-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--spacing-sm);
+    margin-bottom: 2px;
+    flex-wrap: wrap;
+}
+
+.project-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.project-tech {
+    font-size: 0.75rem;
+    color: var(--color-text-light);
+    font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.project-scope {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    margin-bottom: var(--spacing-sm);
+}
+
+.project-details {
+    font-size: 0.825rem;
+    padding-left: var(--spacing-lg);
+    color: var(--color-text);
+}
+
+.project-details li {
+    margin-bottom: 2px;
+}
+
+/* ============================================
+   Education
+   ============================================ */
+.education-item {
+    margin-bottom: var(--spacing-lg);
+}
+
+.education-item:last-child {
+    margin-bottom: 0;
+}
+
+.education-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+}
+
+.education-institution {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.education-qualification {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.education-location {
+    font-size: 0.8rem;
+    color: var(--color-text-light);
+}
+
+.education-period {
+    font-size: 0.8rem;
+    color: var(--color-text-light);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   Loading & Error UI
+   ============================================ */
+.loading-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.cv-empty {
+    text-align: center;
+    padding: var(--spacing-2xl);
+    color: var(--color-text-secondary);
+}
+
+.cv-empty h1 {
+    font-family: var(--font-serif);
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+#blazor-error-ui {
+    background: #fff3cd;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.1);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+    font-size: 0.875rem;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+    body {
+        background: white;
+    }
+
+    .cv-page {
+        box-shadow: none;
+        margin: 0;
+        border-radius: 0;
+        max-width: none;
+    }
+
+    .cv-header {
+        padding: var(--spacing-lg) var(--spacing-xl);
+    }
+
+    .project {
+        break-inside: avoid;
+    }
+
+    .job {
+        break-inside: avoid;
+    }
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 768px) {
+    .cv-page {
+        margin: 0;
+        border-radius: 0;
+    }
+
+    .cv-header {
+        flex-direction: column;
+        padding: var(--spacing-xl) var(--spacing-lg);
+    }
+
+    .header-contact {
+        text-align: left;
+    }
+
+    .contact-item {
+        justify-content: flex-start;
+    }
+
+    .cv-body {
+        grid-template-columns: 1fr;
+    }
+
+    .cv-sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .cv-main {
+        padding: var(--spacing-xl) var(--spacing-lg);
+    }
+
+    .job-header,
+    .education-header {
+        flex-direction: column;
+        gap: var(--spacing-xs);
+    }
+}

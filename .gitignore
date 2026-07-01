@@ -1,0 +1,46 @@
+# ============================================
+#  Personal data — MUST NOT be committed
+# ============================================
+# Real CV data lives only in SQL Server, loaded via the secured admin API.
+*.pdf
+Abre CV.pdf
+
+# The real CV data payload (PUT to the admin API). Never commit real data.
+cv-data.local.json
+*.local.json
+
+# Secrets / environment-specific config (real values are set as env vars on the host)
+appsettings.Production.json
+appsettings.*.Local.json
+*.env
+.env
+secrets.json
+
+# Local database files (if a local provider is ever used)
+*.db
+*.db-shm
+*.db-wal
+*.mdf
+*.ldf
+
+# ============================================
+#  .NET build output
+# ============================================
+bin/
+obj/
+publish/
+*.user
+*.suo
+
+# ============================================
+#  IDE / tooling
+# ============================================
+.vs/
+.vscode/
+.idea/
+.claude/
+
+# ============================================
+#  Node (if any front-end tooling is added later)
+# ============================================
+node_modules/

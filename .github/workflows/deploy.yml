@@ -1,0 +1,122 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore CV.sln
+
+      - name: Build
+        run: dotnet build CV.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test CV.sln -c Release --no-build --verbosity normal
+
+      # Publishes the hosted app: CV.Api + the compiled Blazor WASM client
+      # (plus an auto-generated web.config for the IIS ASP.NET Core Module).
+      - name: Publish
+        run: dotnet publish CV.Api/CV.Api.csproj -c Release -o publish
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cv-site
+          path: publish/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    # --------------------------------------------------------------------
+    # Target: Plesk on Windows (IIS), deployed over FTPS.
+    #
+    # Repository secrets to configure (Settings -> Secrets and variables -> Actions):
+    #   PLESK_FTP_SERVER     bare host, e.g. yourdomain.com  (no ftp:// prefix)
+    #   PLESK_FTP_USERNAME
+    #   PLESK_FTP_PASSWORD
+    #
+    # App configuration comes from GitHub repository secrets and is written into
+    # appsettings.Production.json in the runner at deploy time (never committed):
+    #   ConnectionStrings__CvDb   -> SQL Server connection string
+    #   CvAdmin__ApiKey           -> long random secret for the admin write API
+    #
+    # EF Core migrations are applied automatically on app startup.
+    #
+    # IIS locks the running app's DLLs, so we drop an app_offline.htm before the
+    # sync (which stops the app + releases the locks and shows a maintenance page)
+    # and remove it afterwards to bring the app back up.
+    # --------------------------------------------------------------------
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cv-site
+          path: publish
+
+      # Inject secrets into the published app. jq safely escapes any special
+      # characters in the connection string. This file is gitignored and only
+      # ever exists on the runner + the server, never in the repo.
+      - name: Write production configuration from secrets
+        env:
+          CV_DB: ${{ secrets.ConnectionStrings__CvDb }}
+          CV_KEY: ${{ secrets.CvAdmin__ApiKey }}
+        run: |
+          jq -n --arg cs "$CV_DB" --arg key "$CV_KEY" \
+            '{ConnectionStrings:{CvDb:$cs},CvAdmin:{ApiKey:$key}}' \
+            > publish/appsettings.Production.json
+          echo "Wrote publish/appsettings.Production.json (values hidden)."
+
+      - name: Create maintenance page
+        run: |
+          cat > app_offline.htm <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>Updating…</title></head>
+          <body style="font-family:sans-serif;text-align:center;padding:4rem">
+            <h1>Be right back</h1>
+            <p>This site is being updated. Please check back in a moment.</p>
+          </body>
+          </html>
+          EOF
+
+      - name: Take app offline (IIS)
+        run: |
+          curl --fail --ssl-reqd \
+            -u "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" \
+            -T app_offline.htm \
+            "ftp://${{ secrets.PLESK_FTP_SERVER }}/httpdocs/app_offline.htm"
+
+      - name: Deploy via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.PLESK_FTP_SERVER }}
+          username: ${{ secrets.PLESK_FTP_USERNAME }}
+          password: ${{ secrets.PLESK_FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./publish/
+          server-dir: ./httpdocs/
+          # Don't delete the maintenance page during sync; we remove it explicitly below.
+          exclude: |
+            **/app_offline.htm
+
+      - name: Bring app back online (IIS)
+        if: always()
+        run: |
+          curl --ssl-reqd \
+            -u "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" \
+            "ftp://${{ secrets.PLESK_FTP_SERVER }}/" \
+            -Q "DELE httpdocs/app_offline.htm" || true

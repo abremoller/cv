@@ -1,0 +1,24 @@
+<section class="cv-section">
+    <h2 class="section-title">Education</h2>
+
+    @foreach (var edu in Education)
+    {
+        <div class="education-item">
+            <div class="education-header">
+                <div>
+                    <h3 class="education-institution">@edu.Institution</h3>
+                    <p class="education-qualification">@edu.Qualification</p>
+                    @if (!string.IsNullOrWhiteSpace(edu.Location))
+                    {
+                        <p class="education-location">@edu.Location</p>
+                    }
+                </div>
+                <span class="education-period">@edu.Period</span>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public List<EducationDto> Education { get; set; } = [];
+}

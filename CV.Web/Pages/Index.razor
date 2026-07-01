@@ -1,0 +1,53 @@
+@page "/"
+@inject CvService CvService
+
+@if (_loading)
+{
+    <div class="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+}
+else if (_cv is null)
+{
+    <div class="cv-empty">
+        <h1>Curriculum Vitae</h1>
+        <p>This CV has not been published yet.</p>
+    </div>
+}
+else
+{
+    <PageTitle>@_cv.Header.Name — @_cv.Header.Title</PageTitle>
+
+    <HeaderSection Header="_cv.Header" />
+
+    <SummarySection Summary="_cv.Summary" />
+
+    <div class="cv-body">
+        <div class="cv-sidebar">
+            <PersonalInfo Info="_cv.PersonalInfo" />
+            <SkillsSection Skills="_cv.Skills" CurrentFocus="_cv.CurrentFocus" />
+            <ToolsSection Tools="_cv.Tools" />
+        </div>
+        <div class="cv-main">
+            <ExperienceSection Jobs="_cv.Experience" />
+            <EducationSection Education="_cv.Education" />
+        </div>
+    </div>
+}
+
+@code {
+    private CvDto? _cv;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _cv = await CvService.GetCvAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

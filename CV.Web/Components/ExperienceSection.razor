@@ -1,0 +1,57 @@
+<section class="cv-section">
+    <h2 class="section-title">Experience</h2>
+
+    @foreach (var job in Jobs)
+    {
+        <article class="job">
+            <div class="job-header">
+                <div>
+                    <h3 class="job-company">@job.Company</h3>
+                    <p class="job-role">@job.Role — <span class="job-location">@job.Location</span></p>
+                </div>
+                <span class="job-period">@job.Period</span>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(job.Description))
+            {
+                <p class="job-description">@job.Description</p>
+            }
+
+            @if (job.Responsibilities.Count > 0)
+            {
+                <ul class="job-responsibilities">
+                    @foreach (var item in job.Responsibilities)
+                    {
+                        <li>@item</li>
+                    }
+                </ul>
+            }
+
+            @if (job.Projects.Count > 0)
+            {
+                <div class="projects">
+                    @foreach (var project in job.Projects)
+                    {
+                        <div class="project">
+                            <div class="project-header">
+                                <h4 class="project-name">@project.Name</h4>
+                                <span class="project-tech">@project.Tech</span>
+                            </div>
+                            <p class="project-scope">@project.Scope</p>
+                            <ul class="project-details">
+                                @foreach (var detail in project.Details)
+                                {
+                                    <li>@detail</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            }
+        </article>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public List<JobDto> Jobs { get; set; } = [];
+}

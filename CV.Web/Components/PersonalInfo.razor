@@ -1,0 +1,53 @@
+<section class="cv-section">
+    <h2 class="section-title">Personal Information</h2>
+    <dl class="info-list">
+        @if (!string.IsNullOrWhiteSpace(Info.FullNames))
+        {
+            <dt>Full Names</dt>
+            <dd>@Info.FullNames</dd>
+        }
+        @if (Age is not null)
+        {
+            <dt>Age</dt>
+            <dd>@Age</dd>
+        }
+        @if (!string.IsNullOrWhiteSpace(Info.DateOfBirth))
+        {
+            <dt>Date of Birth</dt>
+            <dd>@Info.DateOfBirth</dd>
+        }
+        @if (!string.IsNullOrWhiteSpace(Info.Nationality))
+        {
+            <dt>Nationality</dt>
+            <dd>@Info.Nationality</dd>
+        }
+        @if (!string.IsNullOrWhiteSpace(Info.Languages))
+        {
+            <dt>Languages</dt>
+            <dd>@Info.Languages</dd>
+        }
+        <dt>Driver's Licence</dt>
+        <dd>@(Info.DriversLicence ? "Yes" : "No")</dd>
+        <dt>Passport</dt>
+        <dd>@(Info.Passport ? "Yes" : "No")</dd>
+    </dl>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public PersonalInfoDto Info { get; set; } = new();
+
+    private int? Age
+    {
+        get
+        {
+            if (DateTime.TryParse(Info.DateOfBirth, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var dob))
+            {
+                var age = DateTime.Now.Year - dob.Year;
+                if (dob.Date > DateTime.Now.AddYears(-age)) age--;
+                return age;
+            }
+            return null;
+        }
+    }
+}

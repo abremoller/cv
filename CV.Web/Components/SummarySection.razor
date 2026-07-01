@@ -1,0 +1,10 @@
+@if (!string.IsNullOrWhiteSpace(Summary))
+{
+    <section class="cv-summary">
+        <p>@Summary</p>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Summary { get; set; } = "";
+}

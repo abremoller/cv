@@ -1,0 +1,13 @@
+<section class="cv-section">
+    <h2 class="section-title">Tools</h2>
+    <div class="tools-list">
+        @foreach (var tool in Tools)
+        {
+            <span class="tool-tag">@tool</span>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public List<string> Tools { get; set; } = [];
+}
