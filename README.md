@@ -64,12 +64,12 @@ Then open the printed URL. Swagger UI is available at `/swagger` in Development.
 
 ## Configuration
 
-Real configuration is provided by environment variables in the hosting environment — never in the repo.
+Real configuration lives in `appsettings.Production.json` on the server, generated at deploy time from GitHub secrets — never committed. Locally, both settings can be supplied as environment variables (or left unset to use the in-memory fallback).
 
-| Variable                    | Purpose                                                        |
+| Setting                     | Purpose                                                        |
 | --------------------------- | -------------------------------------------------------------- |
-| `ConnectionStrings__CvDb`   | SQL Server connection string. If unset, an in-memory DB is used. |
-| `CvAdmin__ApiKey`           | Long random secret required by the `PUT /api/cv` admin endpoint. |
+| `ConnectionStrings:CvDb`    | SQL Server connection string. If unset, an in-memory DB is used. |
+| `CvAdmin:ApiKey`            | Long random secret required by the `PUT /api/cv` admin endpoint. |
 
 EF Core migrations are applied automatically on startup when a SQL Server connection string is present.
 
@@ -92,4 +92,12 @@ Covers the data store (round-trip, ordering, replace, seed-once) and the API pip
 
 ## Deployment (CI/CD)
 
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds, tests, publishes the hosted app, and deploys to Plesk over FTPS on push to `main`. Configure these GitHub secrets: `PLESK_FTP_SERVER`, `PLESK_FTP_USERNAME`, `PLESK_FTP_PASSWORD`, and set the host environment variables above.
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds, tests, publishes the app self-contained, and deploys to Plesk (Windows/IIS) over FTP on push to `main`. It drops an `app_offline.htm` to release IIS file locks during the sync, then removes it.
+
+Configuration is injected at deploy time from GitHub repository secrets into `appsettings.Production.json` (never committed):
+
+| Secret | Purpose |
+| --- | --- |
+| `PLESK_FTP_SERVER` / `PLESK_FTP_USERNAME` / `PLESK_FTP_PASSWORD` | FTP deploy credentials |
+| `ConnectionStrings__CvDb` | SQL Server connection string |
+| `CvAdmin__ApiKey` | Secret for the admin write API |

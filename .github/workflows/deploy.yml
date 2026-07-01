@@ -3,10 +3,12 @@ name: Build & Deploy
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,131 +16,79 @@ jobs:
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
       - name: Restore
         run: dotnet restore CV.sln
 
       - name: Build
-        run: dotnet build CV.sln -c Release --no-restore
+        run: dotnet build CV.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test CV.sln -c Release --no-build --verbosity normal
-
-      # Publishes the hosted app: CV.Api + the compiled Blazor WASM client
-      # (plus an auto-generated web.config for the IIS ASP.NET Core Module).
-      - name: Publish
-        run: dotnet publish CV.Api/CV.Api.csproj -c Release -o publish
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cv-site
-          path: publish/
+        run: dotnet test CV.sln --configuration Release --no-build --verbosity normal
 
   deploy:
-    needs: build
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
 
     # --------------------------------------------------------------------
-    # Target: Plesk on Windows (IIS), deployed over FTPS.
+    # Target: Plesk on Windows (IIS), deployed over plain FTP (passive).
+    # (The FTP service uses a self-signed cert and IIS rejects FTPS data-channel
+    #  protection, so we use plain FTP — matching the working Whip pipeline.)
     #
-    # Repository secrets to configure (Settings -> Secrets and variables -> Actions):
-    #   PLESK_FTP_SERVER     bare host, e.g. yourdomain.com  (no ftp:// prefix)
-    #   PLESK_FTP_USERNAME
-    #   PLESK_FTP_PASSWORD
-    #
-    # App configuration comes from GitHub repository secrets and is written into
-    # appsettings.Production.json in the runner at deploy time (never committed):
+    # Repository secrets:
+    #   PLESK_FTP_SERVER / PLESK_FTP_USERNAME / PLESK_FTP_PASSWORD
     #   ConnectionStrings__CvDb   -> SQL Server connection string
-    #   CvAdmin__ApiKey           -> long random secret for the admin write API
+    #   CvAdmin__ApiKey           -> secret for the admin write API
     #
+    # The FTP user is chrooted to the site's web root, so server-dir is "./".
     # EF Core migrations are applied automatically on app startup.
-    #
-    # IIS locks the running app's DLLs, so we drop an app_offline.htm before the
-    # sync (which stops the app + releases the locks and shows a maintenance page)
-    # and remove it afterwards to bring the app back up.
-    #
-    # Deploy uses lftp. Plesk's FTP service presents a self-signed certificate,
-    # so certificate verification is disabled (ssl:verify-certificate no) — the
-    # channel is still TLS-encrypted (ssl-force), it just isn't CA-validated.
+    # IIS locks the running app's DLLs, so we drop app_offline.htm first
+    # (stops the app + releases locks) and remove it afterwards.
     # --------------------------------------------------------------------
-    env:
-      FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
-      FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
-      FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
-      REMOTE_DIR: httpdocs
     steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: cv-site
-          path: publish
+      - uses: actions/checkout@v4
 
-      # Inject secrets into the published app. jq safely escapes any special
-      # characters in the connection string. This file is gitignored and only
-      # ever exists on the runner + the server, never in the repo.
-      - name: Write production configuration from secrets
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # Self-contained so the server doesn't depend on a specific installed runtime.
+      - name: Publish
+        run: dotnet publish CV.Api/CV.Api.csproj --configuration Release --self-contained --runtime win-x64 --output ./publish
+
+      # Inject secrets into the published app. jq safely escapes special characters.
+      # This file is gitignored and only exists on the runner + server, never in the repo.
+      - name: Create production config
         env:
           CV_DB: ${{ secrets.ConnectionStrings__CvDb }}
           CV_KEY: ${{ secrets.CvAdmin__ApiKey }}
         run: |
-          jq -n --arg cs "$CV_DB" --arg key "$CV_KEY" \
-            '{ConnectionStrings:{CvDb:$cs},CvAdmin:{ApiKey:$key}}' \
-            > publish/appsettings.Production.json
-          echo "Wrote publish/appsettings.Production.json (values hidden)."
+          jq -n '{ConnectionStrings: {CvDb: env.CV_DB}, CvAdmin: {ApiKey: env.CV_KEY}}' \
+            > ./publish/appsettings.Production.json
 
-      - name: Create maintenance page
+      - name: Take app offline (release IIS file locks)
+        continue-on-error: true
         run: |
-          cat > app_offline.htm <<'EOF'
-          <!doctype html>
-          <html lang="en">
-          <head><meta charset="utf-8"><title>Updating…</title></head>
-          <body style="font-family:sans-serif;text-align:center;padding:4rem">
-            <h1>Be right back</h1>
-            <p>This site is being updated. Please check back in a moment.</p>
-          </body>
-          </html>
-          EOF
+          echo '<html><body><h1>Site is updating, please refresh in a moment...</h1></body></html>' > app_offline.htm
+          curl --ftp-pasv --connect-timeout 30 -T app_offline.htm "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}"
+          sleep 5
 
-      - name: Install lftp
-        run: sudo apt-get update && sudo apt-get install -y lftp
+      - name: Deploy to Plesk via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.PLESK_FTP_SERVER }}
+          username: ${{ secrets.PLESK_FTP_USERNAME }}
+          password: ${{ secrets.PLESK_FTP_PASSWORD }}
+          local-dir: ./publish/
+          server-dir: ./
+          exclude: |
+            **/logs/**
+            **/DataProtection-Keys/**
 
-      - name: Take app offline (IIS)
+      - name: Bring app online
+        continue-on-error: true
         run: |
-          lftp <<EOF
-          set ssl:verify-certificate no
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set net:max-retries 2
-          open "$FTP_HOST"
-          user "$FTP_USER" "$FTP_PASS"
-          put -O "$REMOTE_DIR" app_offline.htm
-          bye
-          EOF
-
-      - name: Deploy via FTPS
-        run: |
-          lftp <<EOF
-          set ssl:verify-certificate no
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set net:max-retries 2
-          open "$FTP_HOST"
-          user "$FTP_USER" "$FTP_PASS"
-          mirror -R --delete --parallel=4 --exclude-glob app_offline.htm publish/ "$REMOTE_DIR/"
-          bye
-          EOF
-
-      - name: Bring app back online (IIS)
-        if: always()
-        run: |
-          lftp <<EOF
-          set ssl:verify-certificate no
-          set ftp:ssl-force true
-          open "$FTP_HOST"
-          user "$FTP_USER" "$FTP_PASS"
-          rm -f "$REMOTE_DIR/app_offline.htm"
-          bye
-          EOF
+          curl --ftp-pasv --connect-timeout 30 "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" -Q "DELE app_offline.htm"
