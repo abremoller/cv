@@ -59,7 +59,16 @@ jobs:
     # IIS locks the running app's DLLs, so we drop an app_offline.htm before the
     # sync (which stops the app + releases the locks and shows a maintenance page)
     # and remove it afterwards to bring the app back up.
+    #
+    # Deploy uses lftp. Plesk's FTP service presents a self-signed certificate,
+    # so certificate verification is disabled (ssl:verify-certificate no) — the
+    # channel is still TLS-encrypted (ssl-force), it just isn't CA-validated.
     # --------------------------------------------------------------------
+    env:
+      FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
+      FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
+      FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
+      REMOTE_DIR: httpdocs
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -93,30 +102,43 @@ jobs:
           </html>
           EOF
 
+      - name: Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
       - name: Take app offline (IIS)
         run: |
-          curl --fail --ssl-reqd \
-            -u "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" \
-            -T app_offline.htm \
-            "ftp://${{ secrets.PLESK_FTP_SERVER }}/httpdocs/app_offline.htm"
+          lftp <<EOF
+          set ssl:verify-certificate no
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set net:max-retries 2
+          open "$FTP_HOST"
+          user "$FTP_USER" "$FTP_PASS"
+          put -O "$REMOTE_DIR" app_offline.htm
+          bye
+          EOF
 
       - name: Deploy via FTPS
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.PLESK_FTP_SERVER }}
-          username: ${{ secrets.PLESK_FTP_USERNAME }}
-          password: ${{ secrets.PLESK_FTP_PASSWORD }}
-          protocol: ftps
-          local-dir: ./publish/
-          server-dir: ./httpdocs/
-          # Don't delete the maintenance page during sync; we remove it explicitly below.
-          exclude: |
-            **/app_offline.htm
+        run: |
+          lftp <<EOF
+          set ssl:verify-certificate no
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set net:max-retries 2
+          open "$FTP_HOST"
+          user "$FTP_USER" "$FTP_PASS"
+          mirror -R --delete --parallel=4 --exclude-glob app_offline.htm publish/ "$REMOTE_DIR/"
+          bye
+          EOF
 
       - name: Bring app back online (IIS)
         if: always()
         run: |
-          curl --ssl-reqd \
-            -u "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" \
-            "ftp://${{ secrets.PLESK_FTP_SERVER }}/" \
-            -Q "DELE httpdocs/app_offline.htm" || true
+          lftp <<EOF
+          set ssl:verify-certificate no
+          set ftp:ssl-force true
+          open "$FTP_HOST"
+          user "$FTP_USER" "$FTP_PASS"
+          rm -f "$REMOTE_DIR/app_offline.htm"
+          bye
+          EOF
