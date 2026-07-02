@@ -33,20 +33,30 @@ jobs:
     runs-on: ubuntu-latest
 
     # --------------------------------------------------------------------
-    # Target: Plesk on Windows (IIS), deployed over plain FTP (passive).
-    # (The FTP service uses a self-signed cert and IIS rejects FTPS data-channel
-    #  protection, so we use plain FTP — matching the working Whip pipeline.)
+    # Target: Plesk on Windows (IIS).
+    #
+    # The FTP service requires TLS for login (plain FTP is refused with 530) and
+    # presents a self-signed certificate. We deploy with curl over explicit FTPS:
+    #   --ssl-reqd  force TLS (login succeeds)
+    #   -k          accept the self-signed certificate
+    #   --ftp-pasv  passive mode
+    # curl reuses the control connection's TLS session for the data channel, which
+    # is what IIS FTP requires (and is why lftp/plain-FTP failed here).
     #
     # Repository secrets:
     #   PLESK_FTP_SERVER / PLESK_FTP_USERNAME / PLESK_FTP_PASSWORD
     #   ConnectionStrings__CvDb   -> SQL Server connection string
     #   CvAdmin__ApiKey           -> secret for the admin write API
     #
-    # The FTP user is chrooted to the site's web root, so server-dir is "./".
+    # The FTP user is chrooted to the site's web root, so paths are relative to "/".
     # EF Core migrations are applied automatically on app startup.
-    # IIS locks the running app's DLLs, so we drop app_offline.htm first
-    # (stops the app + releases locks) and remove it afterwards.
+    # IIS locks the running app's DLLs, so app_offline.htm is uploaded first
+    # (stops the app + releases locks) and removed at the end.
     # --------------------------------------------------------------------
+    env:
+      FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
+      FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
+      FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,22 +83,28 @@ jobs:
         continue-on-error: true
         run: |
           echo '<html><body><h1>Site is updating, please refresh in a moment...</h1></body></html>' > app_offline.htm
-          curl -k --ssl-reqd --ftp-pasv --connect-timeout 30 -T app_offline.htm "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}"
+          curl -k --ssl-reqd --ftp-pasv --connect-timeout 30 \
+            -T app_offline.htm "ftp://${FTP_HOST}/app_offline.htm" \
+            --user "${FTP_USER}:${FTP_PASS}"
           sleep 5
 
-      - name: Deploy to Plesk via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.PLESK_FTP_SERVER }}
-          username: ${{ secrets.PLESK_FTP_USERNAME }}
-          password: ${{ secrets.PLESK_FTP_PASSWORD }}
-          local-dir: ./publish/
-          server-dir: ./
-          exclude: |
-            **/logs/**
-            **/DataProtection-Keys/**
+      - name: Deploy over FTPS
+        run: |
+          config="$(mktemp)"
+          while IFS= read -r -d '' f; do
+            rel="${f#publish/}"
+            printf -- '-T "%s"\nurl = "ftp://%s/%s"\n' "$f" "$FTP_HOST" "$rel" >> "$config"
+          done < <(find publish -type f -print0)
+          curl -k --ssl-reqd --ftp-pasv --ftp-create-dirs --fail -sS \
+            --user "${FTP_USER}:${FTP_PASS}" \
+            -K "$config"
+          echo "Uploaded $(find publish -type f | wc -l) files."
 
       - name: Bring app online
+        if: always()
         continue-on-error: true
         run: |
-          curl --ftp-pasv --connect-timeout 30 "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" -Q "DELE app_offline.htm"
+          curl -k --ssl-reqd --ftp-pasv --connect-timeout 30 \
+            "ftp://${FTP_HOST}/" \
+            --user "${FTP_USER}:${FTP_PASS}" \
+            -Q "DELE app_offline.htm"
