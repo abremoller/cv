@@ -18,36 +18,19 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore
-        run: dotnet restore CV.sln
+      - name: Restore dependencies
+        run: dotnet restore
 
       - name: Build
-        run: dotnet build CV.sln --configuration Release --no-restore
+        run: dotnet build --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test CV.sln --configuration Release --no-build --verbosity normal
+        run: dotnet test --configuration Release --no-build --verbosity normal
 
   deploy:
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: windows-latest
-
-    # --------------------------------------------------------------------
-    # Target: Plesk on Windows (IIS). The FTP service requires TLS for login and
-    # presents a self-signed certificate, and IIS requires the data connection to
-    # reuse the control connection's TLS session. WinSCP handles all of this and,
-    # crucially, uses a SINGLE login per deploy (so it won't trip Plesk's
-    # brute-force IP ban the way per-file FTP connections did).
-    #
-    # Repository secrets:
-    #   PLESK_FTP_SERVER / PLESK_FTP_USERNAME / PLESK_FTP_PASSWORD
-    #   ConnectionStrings__CvDb   -> SQL Server connection string
-    #   CvAdmin__ApiKey           -> secret for the admin write API
-    #
-    # The FTP user is chrooted to the site's web root ("/").
-    # EF Core migrations are applied automatically on app startup.
-    # app_offline.htm is uploaded first to release IIS file locks, then removed.
-    # --------------------------------------------------------------------
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -59,66 +42,38 @@ jobs:
       - name: Publish
         run: dotnet publish CV.Api/CV.Api.csproj --configuration Release --self-contained --runtime win-x64 --output ./publish
 
-      # Inject secrets into the published app. This file is gitignored and only
-      # exists on the runner + server, never in the repo.
+      # Inject secrets into the published app (gitignored; never committed).
       - name: Create production config
-        shell: pwsh
         env:
           CV_DB: ${{ secrets.ConnectionStrings__CvDb }}
           CV_KEY: ${{ secrets.CvAdmin__ApiKey }}
         run: |
-          $cfg = [ordered]@{
-            ConnectionStrings = [ordered]@{ CvDb = $env:CV_DB }
-            CvAdmin           = [ordered]@{ ApiKey = $env:CV_KEY }
-          }
-          $cfg | ConvertTo-Json -Depth 5 | Set-Content -Path ./publish/appsettings.Production.json -Encoding utf8
+          jq -n '{ConnectionStrings: {CvDb: env.CV_DB}, CvAdmin: {ApiKey: env.CV_KEY}}' \
+            > ./publish/appsettings.Production.json
 
-      - name: Install WinSCP
-        shell: pwsh
-        run: choco install winscp.portable -y --no-progress
+      - name: Create logs directory in publish output
+        run: mkdir -p ./publish/logs
 
-      - name: Deploy via FTPS (WinSCP, single session)
-        shell: powershell
-        env:
-          FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
-          FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
-          FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
+      - name: Take app offline (release IIS file locks)
+        continue-on-error: true
         run: |
-          $ErrorActionPreference = 'Stop'
-          $dll = Get-ChildItem -Path $env:ChocolateyInstall -Recurse -Filter WinSCPnet.dll |
-                 Select-Object -First 1 -ExpandProperty FullName
-          Add-Type -Path $dll
+          echo '<html><body><h1>Site is updating, please refresh in a moment...</h1></body></html>' > app_offline.htm
+          curl --ftp-pasv --connect-timeout 30 -T app_offline.htm "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}"
+          sleep 5
 
-          Set-Content -Path app_offline.htm -Value '<html><body><h1>Site is updating, please refresh in a moment...</h1></body></html>'
+      - name: Deploy to Plesk via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.PLESK_FTP_SERVER }}
+          username: ${{ secrets.PLESK_FTP_USERNAME }}
+          password: ${{ secrets.PLESK_FTP_PASSWORD }}
+          local-dir: ./publish/
+          server-dir: ./
+          exclude: |
+            **/logs/**
+            **/DataProtection-Keys/**
 
-          $opts = New-Object WinSCP.SessionOptions
-          $opts.Protocol   = [WinSCP.Protocol]::Ftp
-          $opts.FtpSecure  = [WinSCP.FtpSecure]::Explicit
-          $opts.HostName   = $env:FTP_HOST
-          $opts.UserName   = $env:FTP_USER
-          $opts.Password   = $env:FTP_PASS
-          $opts.GiveUpSecurityAndAcceptAnyTlsHostCertificate = $true
-
-          $session = New-Object WinSCP.Session
-          try {
-            $session.Open($opts)
-
-            # Take the app offline to release IIS file locks.
-            $session.PutFileToDirectory("app_offline.htm", "/").Check()
-            Start-Sleep -Seconds 5
-
-            # Mirror the publish output to the web root, removing stale files but
-            # preserving runtime folders and the maintenance page.
-            $to = New-Object WinSCP.TransferOptions
-            $to.FileMask = "| logs/; DataProtection-Keys/; app_offline.htm"
-            $local = (Resolve-Path ./publish).Path
-            $result = $session.SynchronizeDirectories(
-              [WinSCP.SynchronizationMode]::Remote, $local, "/", $true, $false,
-              [WinSCP.SynchronizationCriteria]::Time, $to)
-            $result.Check()
-          }
-          finally {
-            # Always bring the app back online.
-            try { $session.RemoveFiles("/app_offline.htm").Check() } catch { }
-            $session.Dispose()
-          }
+      - name: Bring app online
+        continue-on-error: true
+        run: |
+          curl --ftp-pasv --connect-timeout 30 "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" -Q "DELE app_offline.htm"
