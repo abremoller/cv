@@ -30,33 +30,24 @@ jobs:
   deploy:
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     # --------------------------------------------------------------------
-    # Target: Plesk on Windows (IIS).
-    #
-    # The FTP service requires TLS for login (plain FTP is refused with 530) and
-    # presents a self-signed certificate. We deploy with curl over explicit FTPS:
-    #   --ssl-reqd  force TLS (login succeeds)
-    #   -k          accept the self-signed certificate
-    #   --ftp-pasv  passive mode
-    # curl reuses the control connection's TLS session for the data channel, which
-    # is what IIS FTP requires (and is why lftp/plain-FTP failed here).
+    # Target: Plesk on Windows (IIS). The FTP service requires TLS for login and
+    # presents a self-signed certificate, and IIS requires the data connection to
+    # reuse the control connection's TLS session. WinSCP handles all of this and,
+    # crucially, uses a SINGLE login per deploy (so it won't trip Plesk's
+    # brute-force IP ban the way per-file FTP connections did).
     #
     # Repository secrets:
     #   PLESK_FTP_SERVER / PLESK_FTP_USERNAME / PLESK_FTP_PASSWORD
     #   ConnectionStrings__CvDb   -> SQL Server connection string
     #   CvAdmin__ApiKey           -> secret for the admin write API
     #
-    # The FTP user is chrooted to the site's web root, so paths are relative to "/".
+    # The FTP user is chrooted to the site's web root ("/").
     # EF Core migrations are applied automatically on app startup.
-    # IIS locks the running app's DLLs, so app_offline.htm is uploaded first
-    # (stops the app + releases locks) and removed at the end.
+    # app_offline.htm is uploaded first to release IIS file locks, then removed.
     # --------------------------------------------------------------------
-    env:
-      FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
-      FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
-      FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -65,46 +56,69 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # Self-contained so the server doesn't depend on a specific installed runtime.
       - name: Publish
         run: dotnet publish CV.Api/CV.Api.csproj --configuration Release --self-contained --runtime win-x64 --output ./publish
 
-      # Inject secrets into the published app. jq safely escapes special characters.
-      # This file is gitignored and only exists on the runner + server, never in the repo.
+      # Inject secrets into the published app. This file is gitignored and only
+      # exists on the runner + server, never in the repo.
       - name: Create production config
+        shell: pwsh
         env:
           CV_DB: ${{ secrets.ConnectionStrings__CvDb }}
           CV_KEY: ${{ secrets.CvAdmin__ApiKey }}
         run: |
-          jq -n '{ConnectionStrings: {CvDb: env.CV_DB}, CvAdmin: {ApiKey: env.CV_KEY}}' \
-            > ./publish/appsettings.Production.json
+          $cfg = [ordered]@{
+            ConnectionStrings = [ordered]@{ CvDb = $env:CV_DB }
+            CvAdmin           = [ordered]@{ ApiKey = $env:CV_KEY }
+          }
+          $cfg | ConvertTo-Json -Depth 5 | Set-Content -Path ./publish/appsettings.Production.json -Encoding utf8
 
-      - name: Take app offline (release IIS file locks)
-        continue-on-error: true
-        run: |
-          echo '<html><body><h1>Site is updating, please refresh in a moment...</h1></body></html>' > app_offline.htm
-          curl -k --ssl-reqd --ftp-pasv --connect-timeout 30 \
-            -T app_offline.htm "ftp://${FTP_HOST}/app_offline.htm" \
-            --user "${FTP_USER}:${FTP_PASS}"
-          sleep 5
+      - name: Install WinSCP
+        shell: pwsh
+        run: choco install winscp.portable -y --no-progress
 
-      - name: Deploy over FTPS
+      - name: Deploy via FTPS (WinSCP, single session)
+        shell: powershell
+        env:
+          FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
+          FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
         run: |
-          config="$(mktemp)"
-          while IFS= read -r -d '' f; do
-            rel="${f#publish/}"
-            printf -- '-T "%s"\nurl = "ftp://%s/%s"\n' "$f" "$FTP_HOST" "$rel" >> "$config"
-          done < <(find publish -type f -print0)
-          curl -k --ssl-reqd --ftp-pasv --ftp-create-dirs --fail -sS \
-            --user "${FTP_USER}:${FTP_PASS}" \
-            -K "$config"
-          echo "Uploaded $(find publish -type f | wc -l) files."
+          $ErrorActionPreference = 'Stop'
+          $dll = Get-ChildItem -Path $env:ChocolateyInstall -Recurse -Filter WinSCPnet.dll |
+                 Select-Object -First 1 -ExpandProperty FullName
+          Add-Type -Path $dll
 
-      - name: Bring app online
-        if: always()
-        continue-on-error: true
-        run: |
-          curl -k --ssl-reqd --ftp-pasv --connect-timeout 30 \
-            "ftp://${FTP_HOST}/" \
-            --user "${FTP_USER}:${FTP_PASS}" \
-            -Q "DELE app_offline.htm"
+          Set-Content -Path app_offline.htm -Value '<html><body><h1>Site is updating, please refresh in a moment...</h1></body></html>'
+
+          $opts = New-Object WinSCP.SessionOptions
+          $opts.Protocol   = [WinSCP.Protocol]::Ftp
+          $opts.FtpSecure  = [WinSCP.FtpSecure]::Explicit
+          $opts.HostName   = $env:FTP_HOST
+          $opts.UserName   = $env:FTP_USER
+          $opts.Password   = $env:FTP_PASS
+          $opts.GiveUpSecurityAndAcceptAnyTlsHostCertificate = $true
+
+          $session = New-Object WinSCP.Session
+          try {
+            $session.Open($opts)
+
+            # Take the app offline to release IIS file locks.
+            $session.PutFileToDirectory("app_offline.htm", "/").Check()
+            Start-Sleep -Seconds 5
+
+            # Mirror the publish output to the web root, removing stale files but
+            # preserving runtime folders and the maintenance page.
+            $to = New-Object WinSCP.TransferOptions
+            $to.FileMask = "| logs/; DataProtection-Keys/; app_offline.htm"
+            $local = (Resolve-Path ./publish).Path
+            $result = $session.SynchronizeDirectories(
+              [WinSCP.SynchronizationMode]::Remote, $local, "/", $true, $false,
+              [WinSCP.SynchronizationCriteria]::Time, $to)
+            $result.Check()
+          }
+          finally {
+            # Always bring the app back online.
+            try { $session.RemoveFiles("/app_offline.htm").Check() } catch { }
+            $session.Dispose()
+          }
