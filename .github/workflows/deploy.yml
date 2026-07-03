@@ -54,11 +54,17 @@ jobs:
       - name: Create logs directory in publish output
         run: mkdir -p ./publish/logs
 
+      # Credentials passed via env (NOT interpolated into the shell command),
+      # so a password with special characters isn't mangled by the shell.
       - name: Take app offline (release IIS file locks)
         continue-on-error: true
+        env:
+          FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
+          FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
         run: |
           echo '<html><body><h1>Site is updating, please refresh in a moment...</h1></body></html>' > app_offline.htm
-          curl --ftp-pasv --connect-timeout 30 -T app_offline.htm "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}"
+          curl --ftp-pasv --connect-timeout 30 -T app_offline.htm "ftp://${FTP_HOST}/" --user "${FTP_USER}:${FTP_PASS}"
           sleep 5
 
       - name: Deploy to Plesk via FTP
@@ -74,6 +80,11 @@ jobs:
             **/DataProtection-Keys/**
 
       - name: Bring app online
+        if: always()
         continue-on-error: true
+        env:
+          FTP_HOST: ${{ secrets.PLESK_FTP_SERVER }}
+          FTP_USER: ${{ secrets.PLESK_FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.PLESK_FTP_PASSWORD }}
         run: |
-          curl --ftp-pasv --connect-timeout 30 "ftp://${{ secrets.PLESK_FTP_SERVER }}/" --user "${{ secrets.PLESK_FTP_USERNAME }}:${{ secrets.PLESK_FTP_PASSWORD }}" -Q "DELE app_offline.htm"
+          curl --ftp-pasv --connect-timeout 30 "ftp://${FTP_HOST}/" --user "${FTP_USER}:${FTP_PASS}" -Q "DELE app_offline.htm"
