@@ -41,8 +41,8 @@ Single hosted site: one ASP.NET Core app serves both the API and the compiled We
 
 | Method & route   | Auth        | Description                                |
 | ---------------- | ----------- | ------------------------------------------ |
-| `GET /api/cv`    | public      | Returns the CV document as JSON            |
-| `PUT /api/cv`    | **admin**   | Replaces the entire CV document            |
+| `GET /api/cv`     | public      | Returns the CV document as JSON            |
+| `POST /api/cv`    | **admin**   | Replaces the entire CV document (PUT also accepted) |
 
 ### Security on the admin endpoint
 

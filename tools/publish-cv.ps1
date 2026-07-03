@@ -41,7 +41,7 @@ Write-Host "Publishing $DataFile -> $uri" -ForegroundColor Cyan
 # (Windows PowerShell 5.1 otherwise corrupts multi-byte UTF-8 in string bodies).
 $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
 
-Invoke-RestMethod -Method Put -Uri $uri -Body $bytes -ContentType 'application/json; charset=utf-8' `
+Invoke-RestMethod -Method Post -Uri $uri -Body $bytes -ContentType 'application/json; charset=utf-8' `
     -Headers @{ 'X-Api-Key' = $ApiKey }
 
 Write-Host "CV published successfully." -ForegroundColor Green

@@ -94,7 +94,9 @@ api.MapGet("/cv", async (CvStore store, CancellationToken ct) =>
     return cv is null ? Results.NotFound() : Results.Ok(cv);
 });
 
-api.MapPut("/cv", async (CvDto cv, CvStore store, CancellationToken ct) =>
+// Accept both POST and PUT. POST is used in production because IIS/Plesk blocks
+// PUT at the server level (WebDAV / request filtering) before it reaches the app.
+api.MapMethods("/cv", new[] { "POST", "PUT" }, async (CvDto cv, CvStore store, CancellationToken ct) =>
 {
     await store.ReplaceAsync(cv, ct);
     return Results.NoContent();
