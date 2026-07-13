@@ -88,3 +88,29 @@ jobs:
         run: |
           curl --ftp-pasv --connect-timeout 30 "ftp://${FTP_HOST}/" --user "${FTP_USER}:${FTP_PASS}" -Q "DELE app_offline.htm" \
             || echo "Note: app_offline removal skipped (best-effort step)."
+
+      # Fail the deploy loudly if the site doesn't come back up. Polls the
+      # liveness endpoint through IIS cold-start, then prints /api/diag (which is
+      # secret-free) so a broken deploy shows its cause right here in the log.
+      - name: Smoke test — verify site is healthy
+        env:
+          SITE_URL: https://cv.abremoller.com
+        run: |
+          echo "Waiting for ${SITE_URL}/api/health to return 200 ..."
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${SITE_URL}/api/health" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "✅ Healthy after ~$(( (i - 1) * 5 ))s (HTTP 200)"
+              echo "----- /api/diag -----"
+              curl -s --max-time 10 "${SITE_URL}/api/diag" || true
+              echo
+              exit 0
+            fi
+            echo "  attempt ${i}/30: HTTP ${code} — retrying in 5s"
+            sleep 5
+          done
+          echo "❌ Site did not return healthy within ~150s."
+          echo "----- /api/diag (for debugging) -----"
+          curl -s --max-time 10 "${SITE_URL}/api/diag" || echo "(diag unreachable — the app likely failed to start)"
+          echo
+          exit 1

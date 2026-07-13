@@ -508,28 +508,120 @@ a:hover {
 /* ============================================
    Print Styles
    ============================================ */
+/* Download bar */
+.download-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: var(--color-bg-subtle);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 0.4rem 1rem;
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--font-sans);
+}
+
+.download-btn:hover {
+    background: #1d4ed8;
+}
+
 @media print {
-    body {
-        background: white;
+    /* Force all background colors and images to print */
+    *,
+    *::before,
+    *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
-    .cv-page {
-        box-shadow: none;
+    @page {
+        size: A4;
         margin: 0;
-        border-radius: 0;
-        max-width: none;
     }
 
+    html, body {
+        background: white !important;
+        width: 210mm;
+    }
+
+    /* Hide the download bar */
+    .no-print {
+        display: none !important;
+    }
+
+    /* Remove screen chrome from the page card */
+    .cv-page {
+        box-shadow: none !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    /* Keep the dark header background */
     .cv-header {
-        padding: var(--spacing-lg) var(--spacing-xl);
+        background: var(--color-primary) !important;
+        color: #ffffff !important;
+        padding: var(--spacing-lg) var(--spacing-xl) !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
+    /* Keep sidebar background */
+    .cv-sidebar {
+        background: var(--color-sidebar-bg) !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Preserve skill bar colors */
+    .skill-bar,
+    .skill-bar-fill {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Preserve section title accent color and border */
+    .section-title {
+        color: var(--color-accent) !important;
+        border-bottom-color: var(--color-accent) !important;
+    }
+
+    /* A whole job is often taller than a page, so we must NOT set
+       break-inside: avoid on it — doing so forces the engine to push the
+       entire job to the next page, leaving a large blank under the heading.
+       Instead, keep the smaller sub-units together and prevent orphaned
+       headings. */
+    .section-title {
+        break-after: avoid;
+    }
+
+    /* Keep a company header attached to the content that follows it */
+    .job-header {
+        break-inside: avoid;
+        break-after: avoid;
+    }
+
+    /* Project cards are page-sized or smaller, so keep each one intact */
     .project {
         break-inside: avoid;
     }
 
-    .job {
-        break-inside: avoid;
+    /* Keep links readable in print */
+    a {
+        color: var(--color-accent) !important;
+        text-decoration: none !important;
     }
 }
 

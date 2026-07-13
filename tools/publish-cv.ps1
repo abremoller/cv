@@ -31,7 +31,11 @@ if (-not (Test-Path $DataFile)) {
 }
 
 # Validate the JSON before sending.
-$json = Get-Content $DataFile -Raw
+# NOTE: use .NET ReadAllText (UTF-8 by default, with BOM detection) rather than
+# Get-Content -Raw. Under Windows PowerShell 5.1, Get-Content decodes a BOM-less
+# file with the system ANSI code page, corrupting multi-byte UTF-8 (e.g. "é" ->
+# "Ã©"), which then gets double-encoded when re-serialised to UTF-8 bytes below.
+$json = [System.IO.File]::ReadAllText($DataFile)
 try { $null = $json | ConvertFrom-Json } catch { throw "Invalid JSON in ${DataFile}: $_" }
 
 $uri = "$($BaseUrl.TrimEnd('/'))/api/cv"

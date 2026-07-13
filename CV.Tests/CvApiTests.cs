@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using CV.Api.Data;
 using CV.Shared;
 using FluentAssertions;
@@ -61,6 +62,42 @@ public class CvApiTests
         var cv = await response.Content.ReadFromJsonAsync<CvDto>();
         cv!.Header.Name.Should().NotBeNullOrWhiteSpace();
         cv.Experience.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task Health_returns_ok()
+    {
+        using var factory = Factory();
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/health");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("status").GetString().Should().Be("ok");
+    }
+
+    [Fact]
+    public async Task Diag_reports_config_and_database_state()
+    {
+        using var factory = Factory(apiKey: "correct-key");
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/diag");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Reflects the configured key without leaking its value.
+        json.GetProperty("configuration").GetProperty("adminKeyConfigured").GetBoolean().Should().BeTrue();
+        json.GetProperty("database").GetProperty("canConnect").GetBoolean().Should().BeTrue();
+        // The in-memory DB is seeded with sample data at startup.
+        json.GetProperty("database").GetProperty("hasData").GetBoolean().Should().BeTrue();
+        json.GetProperty("startup").GetProperty("databaseInitOk").GetBoolean().Should().BeTrue();
+
+        // Ensure secret values are never emitted.
+        var raw = await client.GetStringAsync("/api/diag");
+        raw.Should().NotContain("correct-key");
     }
 
     [Fact]
