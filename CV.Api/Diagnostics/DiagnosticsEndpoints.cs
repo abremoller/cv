@@ -109,6 +109,11 @@ public static class DiagnosticsEndpoints
                     databaseInitOk = StartupDiagnostics.DatabaseInitOk,
                     databaseInitError = StartupDiagnostics.DatabaseInitError,
                 },
+                writes = new
+                {
+                    lastError = StartupDiagnostics.LastWriteError,
+                    lastErrorUtc = StartupDiagnostics.LastWriteErrorUtc,
+                },
                 database,
                 pdf = new
                 {

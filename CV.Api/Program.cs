@@ -144,10 +144,24 @@ api.MapGet("/cv/pdf", async (HttpContext ctx, IConfiguration config, Cancellatio
 
 // Accept both POST and PUT. POST is used in production because IIS/Plesk blocks
 // PUT at the server level (WebDAV / request filtering) before it reaches the app.
-api.MapMethods("/cv", new[] { "POST", "PUT" }, async (CvDto cv, CvStore store, CancellationToken ct) =>
+api.MapMethods("/cv", new[] { "POST", "PUT" }, async (CvDto cv, CvStore store, ILoggerFactory loggerFactory, CancellationToken ct) =>
 {
-    await store.ReplaceAsync(cv, ct);
-    return Results.NoContent();
+    try
+    {
+        await store.ReplaceAsync(cv, ct);
+        StartupDiagnostics.LastWriteError = null;
+        return Results.NoContent();
+    }
+    catch (Exception ex)
+    {
+        StartupDiagnostics.LastWriteError = ex.Message;
+        StartupDiagnostics.LastWriteErrorUtc = DateTime.UtcNow;
+        loggerFactory.CreateLogger("CvWrite").LogError(ex, "CV write (ReplaceAsync) failed.");
+        // This endpoint is behind the admin key, so surfacing the underlying DB
+        // error to the authenticated caller is safe — and turns an opaque 500
+        // into an actionable message (e.g. an INSERT permission failure).
+        return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, title: "CV write failed");
+    }
 })
 .AddEndpointFilter<AdminKeyFilter>()
 .RequireRateLimiting("admin");

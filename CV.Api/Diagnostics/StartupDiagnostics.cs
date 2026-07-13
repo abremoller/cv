@@ -11,4 +11,8 @@ public static class StartupDiagnostics
 {
     public static bool DatabaseInitOk { get; set; }
     public static string? DatabaseInitError { get; set; }
+
+    /// <summary>Message of the most recent failed CV write, surfaced via /api/diag.</summary>
+    public static string? LastWriteError { get; set; }
+    public static DateTime? LastWriteErrorUtc { get; set; }
 }
