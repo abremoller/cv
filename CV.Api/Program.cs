@@ -4,6 +4,7 @@ using CV.Api.Pdf;
 using CV.Api.Security;
 using CV.Shared;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using PuppeteerSharp;
@@ -154,13 +155,26 @@ api.MapMethods("/cv", new[] { "POST", "PUT" }, async (CvDto cv, CvStore store, I
     }
     catch (Exception ex)
     {
-        StartupDiagnostics.LastWriteError = ex.Message;
+        // Flatten the exception chain — the actionable cause (e.g. a SqlException
+        // "database is read-only" or "INSERT permission was denied") is the inner
+        // exception, not EF's generic DbUpdateException wrapper. Include the SQL
+        // error number, which pins the category (229 = permission, 3906 = read-only
+        // DB, 8152 = truncation, etc.).
+        var chain = new List<string>();
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+        {
+            var sqlInfo = e is SqlException sql ? $" [SqlError {sql.Number}]" : "";
+            chain.Add($"{e.GetType().Name}: {e.Message}{sqlInfo}");
+        }
+        var detail = string.Join(" || ", chain);
+
+        StartupDiagnostics.LastWriteError = detail;
         StartupDiagnostics.LastWriteErrorUtc = DateTime.UtcNow;
         loggerFactory.CreateLogger("CvWrite").LogError(ex, "CV write (ReplaceAsync) failed.");
         // This endpoint is behind the admin key, so surfacing the underlying DB
         // error to the authenticated caller is safe — and turns an opaque 500
-        // into an actionable message (e.g. an INSERT permission failure).
-        return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, title: "CV write failed");
+        // into an actionable message.
+        return Results.Problem(detail: detail, statusCode: StatusCodes.Status500InternalServerError, title: "CV write failed");
     }
 })
 .AddEndpointFilter<AdminKeyFilter>()
