@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using CV.Api.Data;
 using CV.Api.Pdf;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CV.Api.Diagnostics;
 
@@ -34,7 +35,7 @@ public static class DiagnosticsEndpoints
             timeUtc = DateTime.UtcNow,
         }));
 
-        routes.MapGet("/diag", async (CvDbContext db, IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
+        routes.MapGet("/diag", async (IServiceProvider sp, IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
         {
             var contentRoot = env.ContentRootPath;
             var resolvedBrowserPath = PdfSettings.ResolveBrowserPath(config);
@@ -42,6 +43,12 @@ public static class DiagnosticsEndpoints
             object database;
             try
             {
+                // Resolve the DbContext HERE, inside the try, rather than via handler
+                // injection — so a construction failure (e.g. a corrupt/missing SQL
+                // client assembly after a bad deploy, or an invalid connection
+                // string) is reported instead of 500ing this endpoint too.
+                var db = sp.GetRequiredService<CvDbContext>();
+
                 var canConnect = await db.Database.CanConnectAsync(ct);
                 int? profiles = null, skills = null, jobs = null, education = null;
                 string[] pendingMigrations = [];
@@ -68,13 +75,17 @@ public static class DiagnosticsEndpoints
             }
             catch (Exception ex)
             {
-                // A bad/unreachable connection string surfaces here rather than
-                // taking the whole endpoint down.
+                // Flatten the chain so the real cause (the inner exception) is visible
+                // — that's where "Could not load file or assembly ...SqlClient..." or a
+                // connection/model-building failure actually shows up.
+                var chain = new List<string>();
+                for (Exception? e = ex; e is not null; e = e.InnerException)
+                    chain.Add($"{e.GetType().Name}: {e.Message}");
+
                 database = new
                 {
-                    provider = db.Database.ProviderName,
                     canConnect = false,
-                    error = ex.Message,
+                    error = string.Join(" || ", chain),
                 };
             }
 
