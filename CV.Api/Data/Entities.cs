@@ -1,8 +1,9 @@
 namespace CV.Api.Data;
 
 /// <summary>
-/// Single-row profile (Id = 1) holding header, summary, personal info,
-/// and the flat skill-tag style lists. One CV = one profile.
+/// Single-row profile holding header, summary, personal info, and the flat
+/// skill-tag style lists. One CV = one profile. The Id is database-generated;
+/// the store keeps a single row by replacing it wholesale on each write.
 /// </summary>
 public class CvProfile
 {

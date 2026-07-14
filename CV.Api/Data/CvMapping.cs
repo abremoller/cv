@@ -57,7 +57,10 @@ public static class CvMapping
 
     public static CvProfile ToProfileEntity(this CvDto dto) => new()
     {
-        Id = 1,
+        // Id is left unset (0) so SQL Server's IDENTITY generates it. Assigning an
+        // explicit value inserts into the identity column and fails with error 544
+        // ("Cannot insert explicit value for identity column ... IDENTITY_INSERT is
+        // OFF") on a real database — the in-memory provider silently allows it.
         Name = dto.Header.Name,
         Title = dto.Header.Title,
         Location = dto.Header.Location,
