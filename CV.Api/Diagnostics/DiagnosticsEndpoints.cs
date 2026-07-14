@@ -2,9 +2,10 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using CV.Api.Data;
-using CV.Api.Pdf;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
 
 namespace CV.Api.Diagnostics;
 
@@ -38,7 +39,6 @@ public static class DiagnosticsEndpoints
         routes.MapGet("/diag", async (IServiceProvider sp, IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
         {
             var contentRoot = env.ContentRootPath;
-            var resolvedBrowserPath = PdfSettings.ResolveBrowserPath(config);
 
             object database;
             try
@@ -98,6 +98,29 @@ public static class DiagnosticsEndpoints
             }
             catch { /* StartTime can be denied in some hosts; not worth failing over. */ }
 
+            // Active PDF self-test: render a tiny document to prove the browserless
+            // engine (QuestPDF + its native SkiaSharp lib) actually loads on THIS host.
+            // This is the one runtime risk on locked-down shared hosting, so we verify
+            // it here instead of finding out when someone clicks Download.
+            var pdfRenderOk = false;
+            string? pdfRenderError = null;
+            try
+            {
+                var probe = Document.Create(d => d.Page(p =>
+                {
+                    p.Size(PageSizes.A4);
+                    p.Content().Text("probe");
+                })).GeneratePdf();
+                pdfRenderOk = probe.Length > 0;
+            }
+            catch (Exception ex)
+            {
+                var chain = new List<string>();
+                for (Exception? e = ex; e is not null; e = e.InnerException)
+                    chain.Add($"{e.GetType().Name}: {e.Message}");
+                pdfRenderError = string.Join(" || ", chain);
+            }
+
             return Results.Ok(new
             {
                 status = "ok",
@@ -128,9 +151,10 @@ public static class DiagnosticsEndpoints
                 database,
                 pdf = new
                 {
-                    configuredPath = config["Pdf:ChromePath"],
-                    resolvedBrowserPath,
-                    browserFound = resolvedBrowserPath is not null,
+                    engine = "QuestPDF",
+                    browserRequired = false,
+                    renderTest = pdfRenderOk ? "ok" : "failed",
+                    renderError = pdfRenderError,
                 },
                 runtime = new
                 {

@@ -7,9 +7,11 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using PuppeteerSharp;
-using PuppeteerSharp.Media;
+using QuestPDF.Infrastructure;
 using System.Threading.RateLimiting;
+
+// QuestPDF Community licence — free for individuals and companies under $1M revenue.
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -113,43 +115,24 @@ api.MapGet("/cv", async (CvStore store, CancellationToken ct) =>
     return cv is null ? Results.NotFound() : Results.Ok(cv);
 });
 
-api.MapGet("/cv/pdf", async (HttpContext ctx, IConfiguration config, CancellationToken ct) =>
+api.MapGet("/cv/pdf", async (CvStore store, ILoggerFactory loggerFactory, CancellationToken ct) =>
 {
-    var browserPath = PdfSettings.ResolveBrowserPath(config);
-    if (browserPath is null)
+    var cv = await store.GetAsync(ct);
+    if (cv is null) return Results.NotFound();
+
+    try
     {
-        return Results.Problem(
-            "PDF rendering is unavailable: no Chromium-based browser (Chrome or Edge) was found on the server. " +
-            "Install one or set Pdf:ChromePath. See /api/diag for what was probed.",
-            statusCode: StatusCodes.Status503ServiceUnavailable);
+        // Rendered with QuestPDF (browserless) — no headless Chrome required on the host.
+        var pdfBytes = CvPdfDocument.Render(cv);
+        return Results.File(pdfBytes, "application/pdf", "Abre Moller CV.pdf");
     }
-
-    await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions
+    catch (Exception ex)
     {
-        Headless = true,
-        ExecutablePath = browserPath,
-        Args = ["--no-sandbox", "--disable-setuid-sandbox"]
-    });
-
-    await using var page = await browser.NewPageAsync();
-    await page.SetViewportAsync(new ViewPortOptions { Width = 1200, Height = 900 });
-
-    // Navigate to the CV page on this same server
-    var baseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-    await page.GoToAsync(baseUrl, new NavigationOptions
-    {
-        WaitUntil = [WaitUntilNavigation.Networkidle0],
-        Timeout = 30_000
-    });
-
-    var pdfBytes = await page.PdfDataAsync(new PdfOptions
-    {
-        Format = PaperFormat.A4,
-        PrintBackground = true,
-        MarginOptions = new MarginOptions { Top = "0", Bottom = "0", Left = "0", Right = "0" }
-    });
-
-    return Results.File(pdfBytes, "application/pdf", "Abre Moller CV.pdf");
+        loggerFactory.CreateLogger("CvPdf").LogError(ex, "PDF rendering failed.");
+        return Results.Problem(
+            "PDF generation failed on the server. Check /api/diag (pdf.renderError) for the cause.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
 });
 
 // Accept both POST and PUT. POST is used in production because IIS/Plesk blocks
