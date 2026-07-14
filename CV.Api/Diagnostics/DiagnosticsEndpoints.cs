@@ -37,7 +37,7 @@ public static class DiagnosticsEndpoints
         routes.MapGet("/diag", async (CvDbContext db, IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
         {
             var contentRoot = env.ContentRootPath;
-            var chromePath = PdfSettings.ResolveChromePath(config);
+            var resolvedBrowserPath = PdfSettings.ResolveBrowserPath(config);
 
             object database;
             try
@@ -117,8 +117,9 @@ public static class DiagnosticsEndpoints
                 database,
                 pdf = new
                 {
-                    chromePath,
-                    chromeInstalled = File.Exists(chromePath),
+                    configuredPath = config["Pdf:ChromePath"],
+                    resolvedBrowserPath,
+                    browserFound = resolvedBrowserPath is not null,
                 },
                 runtime = new
                 {

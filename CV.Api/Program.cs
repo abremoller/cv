@@ -115,10 +115,19 @@ api.MapGet("/cv", async (CvStore store, CancellationToken ct) =>
 
 api.MapGet("/cv/pdf", async (HttpContext ctx, IConfiguration config, CancellationToken ct) =>
 {
+    var browserPath = PdfSettings.ResolveBrowserPath(config);
+    if (browserPath is null)
+    {
+        return Results.Problem(
+            "PDF rendering is unavailable: no Chromium-based browser (Chrome or Edge) was found on the server. " +
+            "Install one or set Pdf:ChromePath. See /api/diag for what was probed.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
     await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions
     {
         Headless = true,
-        ExecutablePath = PdfSettings.ResolveChromePath(config),
+        ExecutablePath = browserPath,
         Args = ["--no-sandbox", "--disable-setuid-sandbox"]
     });
 
