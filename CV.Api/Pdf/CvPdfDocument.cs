@@ -72,12 +72,16 @@ public static class CvPdfDocument
                 if (!string.IsNullOrWhiteSpace(cv.Header.Title))
                     c.Item().PaddingTop(2).Text(cv.Header.Title).FontSize(11).FontColor("#cbd5e1");
             });
-            h.ConstantItem(200).AlignRight().Column(c =>
+            h.ConstantItem(210).AlignRight().Column(c =>
             {
                 if (!string.IsNullOrWhiteSpace(cv.Header.Location))
                     c.Item().Text(cv.Header.Location).FontSize(8.5f).FontColor("#e2e8f0");
                 if (!string.IsNullOrWhiteSpace(cv.Header.Email))
-                    c.Item().PaddingTop(2).Text(cv.Header.Email).FontSize(8.5f).FontColor("#93c5fd");
+                    c.Item().PaddingTop(2).Hyperlink($"mailto:{cv.Header.Email}").Text(cv.Header.Email).FontSize(8.5f).FontColor("#93c5fd");
+                if (!string.IsNullOrWhiteSpace(cv.Header.LinkedInUrl))
+                    c.Item().PaddingTop(2).Hyperlink(cv.Header.LinkedInUrl!).Text(ShortUrl(cv.Header.LinkedInUrl!)).FontSize(8.5f).FontColor("#93c5fd");
+                if (!string.IsNullOrWhiteSpace(cv.Header.GitHubUrl))
+                    c.Item().PaddingTop(2).Hyperlink(cv.Header.GitHubUrl!).Text(ShortUrl(cv.Header.GitHubUrl!)).FontSize(8.5f).FontColor("#93c5fd");
             });
         });
     }
@@ -244,6 +248,9 @@ public static class CvPdfDocument
             r.RelativeItem().Text(value).FontSize(7.8f).FontColor(TextColor);
         });
     }
+
+    private static string ShortUrl(string url) =>
+        url.Replace("https://", "").Replace("http://", "").Replace("www.", "").TrimEnd('/');
 
     private static void Section(ColumnDescriptor col, string title)
     {
