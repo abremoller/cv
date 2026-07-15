@@ -8,7 +8,7 @@ namespace CV.Api.Pdf;
 /// <summary>
 /// Renders a <see cref="CvDto"/> to a PDF using QuestPDF — a browserless, code-first
 /// engine (SkiaSharp under the hood). No headless Chrome / wkhtmltopdf required, so it
-/// runs identically on the Plesk host and locally. Layout mirrors the web app's style.
+/// runs identically on the server and locally. Layout mirrors the web app's style.
 /// </summary>
 public static class CvPdfDocument
 {

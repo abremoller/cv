@@ -19,7 +19,7 @@ namespace CV.Api.Diagnostics;
 ///                    presence (booleans only — never the values), database
 ///                    connectivity + record counts, startup outcome, PDF/Chrome
 ///                    availability, and runtime info. This is what tells you *why*
-///                    a fresh deploy is "not working" without RDP-ing into Plesk.
+///                    a fresh deploy is "not working" without RDP-ing into the host.
 ///
 /// Deliberately unauthenticated: it exposes no secrets, and the admin key (which
 /// gates the write endpoint) is often the very thing that's misconfigured — so

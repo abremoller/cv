@@ -30,7 +30,7 @@ builder.Services.AddDbContext<CvDbContext>(opt =>
 
 builder.Services.AddScoped<CvStore>();
 
-// Respect reverse-proxy headers (Plesk / nginx) so HTTPS + client IP are accurate.
+// Respect reverse-proxy headers so HTTPS + client IP are accurate behind a proxy.
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -135,8 +135,8 @@ api.MapGet("/cv/pdf", async (CvStore store, ILoggerFactory loggerFactory, Cancel
     }
 });
 
-// Accept both POST and PUT. POST is used in production because IIS/Plesk blocks
-// PUT at the server level (WebDAV / request filtering) before it reaches the app.
+// Accept both POST and PUT. POST is used in production because some IIS setups
+// block PUT at the server level (WebDAV / request filtering) before it reaches the app.
 api.MapMethods("/cv", new[] { "POST", "PUT" }, async (CvDto cv, CvStore store, ILoggerFactory loggerFactory, CancellationToken ct) =>
 {
     try
