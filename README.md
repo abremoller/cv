@@ -2,7 +2,7 @@
 
 A data-driven personal CV website built with **Blazor WebAssembly** and an **ASP.NET Core** API backed by **SQL Server**. The site renders entirely from data served by a secured API — **no personal data lives in this repository**. The code is the rendering engine; the content lives in a database and is loaded through a secured admin endpoint.
 
-> **Live demo:** _add your URL here_
+> **Live demo:** https://cv.abremoller.com
 
 ---
 
@@ -50,7 +50,7 @@ Single hosted site: one ASP.NET Core app serves both the API and the compiled We
 - **Constant-time** key comparison (`CryptographicOperations.FixedTimeEquals`) to avoid timing attacks.
 - **Fail-closed**: if no key is configured, every write is rejected (`503`).
 - **Rate-limited** (fixed window) to blunt brute-force attempts (`429`).
-- **HTTPS** redirection + HSTS, with forwarded-headers support for a reverse proxy (Plesk / nginx).
+- **HTTPS** redirection + HSTS, with forwarded-headers support for running behind a reverse proxy.
 
 ## Running locally
 
@@ -92,12 +92,13 @@ Covers the data store (round-trip, ordering, replace, seed-once) and the API pip
 
 ## Deployment (CI/CD)
 
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds, tests, publishes the app self-contained, and deploys to Plesk (Windows/IIS) over FTP on push to `main`. It drops an `app_offline.htm` to release IIS file locks during the sync, then removes it.
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds, tests, and publishes the app self-contained, then deploys to a Windows/IIS host on push to `main`. A post-deploy smoke test verifies the site is live and the database-backed API responds, failing the run otherwise.
 
 Configuration is injected at deploy time from GitHub repository secrets into `appsettings.Production.json` (never committed):
 
 | Secret | Purpose |
 | --- | --- |
-| `PLESK_FTP_SERVER` / `PLESK_FTP_USERNAME` / `PLESK_FTP_PASSWORD` | FTP deploy credentials |
 | `ConnectionStrings__CvDb` | SQL Server connection string |
 | `CvAdmin__ApiKey` | Secret for the admin write API |
+
+Deploy credentials for the target host are supplied as additional repository secrets and never appear in the codebase.
