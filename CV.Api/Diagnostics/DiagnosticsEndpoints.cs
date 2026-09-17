@@ -156,17 +156,20 @@ public static class DiagnosticsEndpoints
                     renderTest = pdfRenderOk ? "ok" : "failed",
                     renderError = pdfRenderError,
                 },
+                // Framework/OS details are only exposed in Development — in Production
+                // they just help an attacker fingerprint the host for known exploits.
                 runtime = new
                 {
-                    framework = RuntimeInformation.FrameworkDescription,
-                    os = RuntimeInformation.OSDescription,
+                    framework = env.IsDevelopment() ? RuntimeInformation.FrameworkDescription : null,
+                    os = env.IsDevelopment() ? RuntimeInformation.OSDescription : null,
                     processArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
                     appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(),
                     startedUtc,
                     uptimeSeconds,
                 },
             });
-        });
+        })
+        .RequireRateLimiting("diag");
 
         return routes;
     }

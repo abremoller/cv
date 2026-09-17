@@ -48,6 +48,15 @@ builder.Services.AddRateLimiter(o =>
         opt.Window = TimeSpan.FromMinutes(1);
         opt.QueueLimit = 0;
     });
+    // Looser limit for /api/diag — it's unauthenticated (see DiagnosticsEndpoints)
+    // so still needs a cap, but legitimate monitoring/debugging hits it far more
+    // often than the admin write endpoint.
+    o.AddFixedWindowLimiter("diag", opt =>
+    {
+        opt.PermitLimit = 30;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+    });
 });
 
 builder.Services.AddEndpointsApiExplorer();
